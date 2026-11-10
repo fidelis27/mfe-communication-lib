@@ -15,8 +15,22 @@ export type RemoteLoadEvent =
     };
 
 export const REMOTE_LOAD_EVENT = "mfe:remote-load";
+export const REMOTE_READY_EVENT = "mfe:remote-ready";
 
 let nextAttempt = 0;
+
+export function markRemoteReady(remoteName: string) {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent(REMOTE_READY_EVENT, {
+      detail: {
+        remoteName,
+        readyAt: performance.now(),
+      },
+    }),
+  );
+}
 
 function publishRemoteLoadEvent(detail: RemoteLoadEvent) {
   if (typeof window !== "undefined") {

@@ -1,13 +1,44 @@
 import React, { lazy, Suspense } from "react";
-import { loadRemote } from "../../../remoteLoadingMetrics";
+import { Module } from "@lib-core-mfe/module-frontend/client";
+import { captureHostError } from "@mfe/shared";
+import { loadRemote, markRemoteReady } from "../../../remoteLoadingMetrics";
 import type { ActiveModule } from "../../navigation/modules";
 import { RemoteSkeleton } from "./RemoteSkeleton";
 
 const StudentApp = lazy(() => loadRemote("student", () => import("mfe_student/App")));
-const ActivityApp = lazy(() => loadRemote("activity", () => import("mfe_activity/App")));
 const InstitutionApp = lazy(() => loadRemote("institution", () => import("mfe_institution/App")));
 const DashboardApp = lazy(() => loadRemote("dashboard", () => import("mfe_dashboard/App")));
 const AdminApp = lazy(() => loadRemote("admin", () => import("mfe_admin/App")));
+
+const activityHost = import.meta.env.VITE_MFE_ACTIVITY_URL ?? "http://localhost:4176";
+
+function ActivityModule() {
+  return (
+    <Module
+      name="activity"
+      host={activityHost}
+      allowedHosts={[activityHost]}
+      loading={<RemoteSkeleton label="Carregando atividade" />}
+      fallback={({ retry }) => (
+        <section className="remote-state">
+          <p className="eyebrow">Falha no carregamento</p>
+          <h1>Atividade indisponível</h1>
+          <button type="button" onClick={retry}>
+            Tentar novamente
+          </button>
+        </section>
+      )}
+      onError={(error) => {
+        captureHostError(error, { moduleName: "activity" });
+      }}
+      moduleLifeCycleEvent={{
+        onMounted: () => {
+          markRemoteReady("activity");
+        },
+      }}
+    />
+  );
+}
 
 export function RemoteContent({
   activeModule,
@@ -24,11 +55,7 @@ export function RemoteContent({
         </Suspense>
       );
     case "activity":
-      return (
-        <Suspense fallback={<RemoteSkeleton label="Carregando atividade" />}>
-          <ActivityApp />
-        </Suspense>
-      );
+      return <ActivityModule />;
     case "institution":
       return (
         <Suspense fallback={<RemoteSkeleton label="Carregando módulo de instituições" />}>
