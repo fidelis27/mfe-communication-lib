@@ -20,7 +20,7 @@ async function setup(page, options = {}) {
   return { api, socket };
 }
 
-test("host loads all five real remotes through federation navigation", async ({ page }) => {
+test("host loads all five real remotes through module navigation", async ({ page }) => {
   await setup(page);
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Módulos da secretaria" })).toBeVisible();
@@ -39,6 +39,27 @@ test("host loads all five real remotes through federation navigation", async ({ 
       page.getByRole("main").getByRole("heading", { level: 1, name: module.heading }),
     ).toBeVisible();
   }
+});
+
+test("activity manifest failure shows retry fallback and then loads the module", async ({
+  page,
+}) => {
+  await setup(page);
+  let manifestRequests = 0;
+  await page.route("http://127.0.0.1:4276/api/modules/__modules_configuration", async (route) => {
+    manifestRequests += 1;
+    if (manifestRequests === 1) {
+      await route.fulfill({ status: 503, body: "Temporary provider failure" });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/atividade");
+
+  await expect(page.getByRole("heading", { name: "Atividade indisponível" })).toBeVisible();
+  await page.getByRole("button", { name: "Tentar novamente" }).click();
+  await expect(page.getByRole("heading", { name: "Atividade do sistema." })).toBeVisible();
+  expect(manifestRequests).toBeGreaterThanOrEqual(2);
 });
 
 test("student form creates a record through the real remote", async ({ page }) => {

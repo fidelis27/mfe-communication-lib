@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/modules/[...path].ts": {
+      "includeFiles": "dist/modules/**"
+    }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

@@ -20,6 +20,7 @@ quality guidance. For the project overview, see the [root README](../README.md).
 
 - [ADR directory](./adr/) and [ADR-0001](./adr/0001-query-client-per-remote.md) — query-client ownership by remote.
 - [ADR-0002](./adr/0002-federation-e2e-testing.md) — browser testing with real federated remotes.
+- [ADR-0003](./adr/0003-module-manifest-delivery.md) — serving remote-module manifests on Vercel.
 
 ## Quality
 

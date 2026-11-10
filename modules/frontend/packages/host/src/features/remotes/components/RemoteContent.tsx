@@ -17,6 +17,7 @@ function ActivityModule() {
     <Module
       name="activity"
       host={activityHost}
+      path="/api/modules/__modules_configuration"
       allowedHosts={[activityHost]}
       loading={<RemoteSkeleton label="Carregando atividade" />}
       fallback={({ retry }) => (
