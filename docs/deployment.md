@@ -45,7 +45,8 @@ No projeto Vercel de cada provider, defina `MFE_HOST_ORIGINS` como uma lista
 separada por virgulas das origens exatas do Host autorizadas a ler o manifesto
 e os bundles. Configure as origens de preview somente se forem necessarias;
 nao use `*`. No Host, cada `VITE_MFE_*_URL` aponta para a origem do provider,
-sem sufixo de arquivo de entrada.
+sem sufixo de arquivo de entrada. O fallback SPA dos providers deve excluir
+`/api` para que o manifesto e os bundles sejam atendidos pela Vercel Function.
 
 A chave anon/public e apropriada para o navegador; a seguranca dos dados da
 aplicacao continua no backend Go, que exige JWT e verifica o usuario local.
