@@ -20,11 +20,13 @@ quality guidance. For the project overview, see the [root README](../README.md).
 
 - [ADR directory](./adr/) and [ADR-0001](./adr/0001-query-client-per-remote.md) — query-client ownership by remote.
 - [ADR-0002](./adr/0002-federation-e2e-testing.md) — browser testing with real federated remotes.
+- [ADR-0003](./adr/0003-module-manifest-delivery.md) — serving remote-module manifests on Vercel.
 
 ## Quality
 
 - [Security and quality review](./security-and-quality-review.md) — quality and security review notes.
 - [Performance](./performance.md) — runtime behavior and evidence limits; use it with the [improvement plan](./performance-improvement-plan.md) and task records: [PERF-002](./performance-tasks/PERF-002-shared-domain-events.md), [PERF-003](./performance-tasks/PERF-003-dashboard-event-refresh.md), [PERF-004](./performance-tasks/PERF-004-mfe-request-cancellation.md), [PERF-005](./performance-tasks/PERF-005-paginated-resource-lists.md), [PERF-006](./performance-tasks/PERF-006-remote-loading-metrics.md), [PERF-007](./performance-tasks/PERF-007-federation-runtime-analysis.md), [PERF-008](./performance-tasks/PERF-008-remove-legacy-host-entry.md).
+- [Performance comparison](./performance-lib-comparison.md) — measured comparison for the `module-frontend` migration.
 - [Design system](./design-system.md) — shared tokens, UI primitives, and CSS isolation.
 - [Accessibility test example](../modules/frontend/packages/host/src/App.a11y.test.tsx) and [contrast checker](../scripts/check-contrast.mjs) — automated checks, not a WCAG conformance claim.
 - [Playwright configuration](../playwright.config.mjs) — browser test setup; run it with `npm run test:e2e`.

@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:module": "vite build --config vite.module.config.ts",
     "prebuild": "npm run build --workspace=@mfe/shared",
+    "prebuild:module": "npm run build --workspace=@mfe/shared",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@lib-core-mfe/module-frontend": "0.2.0",
     "@mfe/shared": "0.1.0",
     "@tanstack/react-query": "^5.105.3",
     "react": "^18.2.0",

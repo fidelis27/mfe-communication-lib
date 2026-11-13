@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadRemote, REMOTE_LOAD_EVENT, type RemoteLoadEvent } from "./remoteLoadingMetrics";
+import {
+  loadRemote,
+  markRemoteReady,
+  REMOTE_LOAD_EVENT,
+  REMOTE_READY_EVENT,
+  type RemoteLoadEvent,
+} from "./remoteLoadingMetrics";
 
 describe("remote loading metrics", () => {
   const events: RemoteLoadEvent[] = [];
@@ -50,5 +56,20 @@ describe("remote loading metrics", () => {
       attempt: events[0].attempt,
       phase: "error",
     });
+  });
+
+  it("dispatches a dedicated ready event when the module commits", () => {
+    const listener = vi.fn();
+    window.addEventListener(REMOTE_READY_EVENT, listener);
+
+    markRemoteReady("activity");
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0]).toMatchObject({
+      type: REMOTE_READY_EVENT,
+      detail: { remoteName: "activity" },
+    });
+
+    window.removeEventListener(REMOTE_READY_EVENT, listener);
   });
 });

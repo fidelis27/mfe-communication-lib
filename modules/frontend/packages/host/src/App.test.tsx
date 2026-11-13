@@ -2,7 +2,32 @@ import React from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { vi } from "vitest";
-import { REMOTE_LOAD_EVENT, type RemoteLoadEvent } from "./remoteLoadingMetrics";
+import {
+  REMOTE_LOAD_EVENT,
+  REMOTE_READY_EVENT,
+  type RemoteLoadEvent,
+} from "./remoteLoadingMetrics";
+
+vi.mock("@lib-core-mfe/module-frontend/client", async () => {
+  const React = await import("react");
+  const { default: RemoteAppMock } = await import("./__mocks__/RemoteAppMock");
+
+  function ModuleMock({
+    moduleLifeCycleEvent,
+  }: {
+    moduleLifeCycleEvent?: { onMounted?: () => void };
+  }) {
+    const onMounted = moduleLifeCycleEvent?.onMounted;
+
+    React.useEffect(() => {
+      onMounted?.();
+    }, [onMounted]);
+
+    return React.createElement(RemoteAppMock);
+  }
+
+  return { Module: ModuleMock };
+});
 
 const authMocks = vi.hoisted(() => ({
   initializeAuth: vi.fn(),
@@ -67,7 +92,6 @@ describe("Host navigation", () => {
   it.each([
     ["student", "/estudantes"],
     ["institution", "/instituicoes"],
-    ["activity", "/atividade"],
     ["dashboard", "/dashboard"],
     ["admin", "/admin"],
   ])("records load timing for the %s remote", async (remoteName, path) => {
@@ -88,6 +112,26 @@ describe("Host navigation", () => {
       expect(events[0]).toMatchObject({ remoteName, phase: "start" });
     } finally {
       window.removeEventListener(REMOTE_LOAD_EVENT, listener);
+    }
+  });
+
+  it("records the activity remote as ready after it mounts", async () => {
+    const readyEvents: { remoteName: string; readyAt: number }[] = [];
+    const listener = (event: Event) => {
+      readyEvents.push((event as CustomEvent<(typeof readyEvents)[number]>).detail);
+    };
+    window.addEventListener(REMOTE_READY_EVENT, listener);
+
+    try {
+      await renderHost({ authenticated: true, path: "/atividade" });
+
+      await waitFor(() =>
+        expect(readyEvents).toContainEqual(
+          expect.objectContaining({ remoteName: "activity", readyAt: expect.any(Number) }),
+        ),
+      );
+    } finally {
+      window.removeEventListener(REMOTE_READY_EVENT, listener);
     }
   });
 
