@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:module": "vite build --config vite.module.config.ts",
     "prebuild": "npm run build --workspace=@mfe/shared",
+    "prebuild:module": "npm run build --workspace=@mfe/shared",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -17,7 +19,6 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@originjs/vite-plugin-federation": "^1.4.1",
     "@sentry/vite-plugin": "^11.8.0",
     "@vitejs/plugin-react": "^5.0.4",
     "typescript": "^5.3.0",

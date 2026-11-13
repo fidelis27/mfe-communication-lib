@@ -17,6 +17,7 @@ vi.mock("@mfe/shared", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@mfe/shared")>()),
   ...authMocks,
 }));
+vi.mock("@lib-core-mfe/module-frontend/client", () => ({ Module: () => null }));
 
 describe("domain event delivery across MFEs", () => {
   const fetchMock = vi.fn();

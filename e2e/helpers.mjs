@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
 
-const API_ORIGIN = "http://127.0.0.1:3333";
+const API_ORIGIN = "http://127.0.0.1:4280";
 const AUTH_STORAGE_KEY = "sb-e2e-auth-token";
 
 function base64Url(value) {
@@ -148,7 +148,7 @@ export async function mockApi(
 
 export async function installFakeWebSocket(page) {
   const socketRoutes = [];
-  await page.routeWebSocket("ws://127.0.0.1:3333/events", (route) => {
+  await page.routeWebSocket("ws://127.0.0.1:4280/events", (route) => {
     socketRoutes.push(route);
     route.onMessage(() => {});
   });

@@ -24,6 +24,7 @@ function Get-Status([string] $uri, [hashtable] $headers = @{}, [string] $method 
 
 Assert-Equal (Get-Status "$apiBase/health") 200 "backend health"
 Assert-Equal (Get-Status "$apiBase/institutions") 401 "protected API without identity"
+Assert-Equal (Get-Status "http://localhost:4174/") 200 "host preview"
 
 if ($accessToken) {
   $authHeaders = @{ Authorization = "Bearer $accessToken" }
@@ -38,16 +39,23 @@ $corsHeaders = @{
 }
 Assert-Equal (Get-Status "$apiBase/students" $corsHeaders "OPTIONS") 204 "CORS preflight"
 
-$remoteEntries = @{
-  student = 4173
-  host = 4174
-  institution = 4175
-  activity = 4176
-  dashboard = 4178
-  admin = 4179
-}
-foreach ($remote in $remoteEntries.GetEnumerator()) {
-  Assert-Equal (Get-Status "http://localhost:$($remote.Value)/assets/remoteEntry.js") 200 "$($remote.Key) remoteEntry"
+$moduleProviders = @(
+  @{ Name = "student"; AppName = "mfe-student"; Port = 4173 },
+  @{ Name = "institution"; AppName = "mfe-institution"; Port = 4175 },
+  @{ Name = "activity"; AppName = "mfe-activity"; Port = 4176 },
+  @{ Name = "dashboard"; AppName = "mfe-dashboard"; Port = 4178 },
+  @{ Name = "admin"; AppName = "mfe-admin"; Port = 4179 }
+)
+foreach ($provider in $moduleProviders) {
+  $manifestUrl = "http://localhost:$($provider.Port)/api/modules/__modules_configuration"
+  $manifest = Invoke-RestMethod -Uri $manifestUrl -Headers @{ Origin = $origin }
+  if ($manifest.appName -ne $provider.AppName -or -not ($manifest.modules.PSObject.Properties.Name -contains $provider.Name)) {
+    throw "$($provider.Name) manifest did not publish the expected application and module."
+  }
+  $assetPath = $manifest.modules.($provider.Name).scripts[0]
+  $assetUrl = "http://localhost:$($provider.Port)$assetPath"
+  Assert-Equal (Get-Status $assetUrl @{ Origin = $origin }) 200 "$($provider.Name) module asset"
+  Assert-Equal (Get-Status $manifestUrl @{ Origin = $origin } "OPTIONS") 204 "$($provider.Name) manifest CORS"
 }
 
 if ($accessToken) {
