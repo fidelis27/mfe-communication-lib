@@ -17,7 +17,7 @@ export default defineConfig({
   },
   webServer: {
     command: "npm run e2e:serve",
-    url: "http://127.0.0.1:4279/assets/remoteEntry.js",
+    url: "http://127.0.0.1:4279/api/modules/__modules_configuration",
     timeout: 240_000,
     reuseExistingServer: false,
   },

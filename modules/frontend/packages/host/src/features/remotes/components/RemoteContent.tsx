@@ -1,40 +1,53 @@
-import React, { lazy, Suspense } from "react";
 import { Module } from "@lib-core-mfe/module-frontend/client";
 import { captureHostError } from "@mfe/shared";
-import { loadRemote, markRemoteReady } from "../../../remoteLoadingMetrics";
-import type { ActiveModule } from "../../navigation/modules";
+import { markRemoteReady } from "../../../remoteLoadingMetrics";
+import type { ModuleId, ActiveModule } from "../../navigation/modules";
 import { RemoteSkeleton } from "./RemoteSkeleton";
 
-const StudentApp = lazy(() => loadRemote("student", () => import("mfe_student/App")));
-const InstitutionApp = lazy(() => loadRemote("institution", () => import("mfe_institution/App")));
-const DashboardApp = lazy(() => loadRemote("dashboard", () => import("mfe_dashboard/App")));
-const AdminApp = lazy(() => loadRemote("admin", () => import("mfe_admin/App")));
+const moduleHosts: Record<ModuleId, string> = {
+  student: import.meta.env.VITE_MFE_STUDENT_URL ?? "http://localhost:4173",
+  institution: import.meta.env.VITE_MFE_INSTITUTION_URL ?? "http://localhost:4175",
+  activity: import.meta.env.VITE_MFE_ACTIVITY_URL ?? "http://localhost:4176",
+  dashboard: import.meta.env.VITE_MFE_DASHBOARD_URL ?? "http://localhost:4178",
+  admin: import.meta.env.VITE_MFE_ADMIN_URL ?? "http://localhost:4179",
+};
 
-const activityHost = import.meta.env.VITE_MFE_ACTIVITY_URL ?? "http://localhost:4176";
+const moduleLabels: Record<ModuleId, string> = {
+  student: "estudantes",
+  institution: "instituições",
+  activity: "atividade",
+  dashboard: "dashboard",
+  admin: "administração",
+};
 
-function ActivityModule() {
+function RemoteModule({ name }: { name: ModuleId }) {
+  const host = moduleHosts[name];
+  const label = moduleLabels[name];
+
   return (
     <Module
-      name="activity"
-      host={activityHost}
+      name={name}
+      host={host}
       path="/api/modules/__modules_configuration"
-      allowedHosts={[activityHost]}
-      loading={<RemoteSkeleton label="Carregando atividade" />}
+      allowedHosts={[host]}
+      requireIntegrity
+      manifestTtlMs={60_000}
+      loading={<RemoteSkeleton label={`Carregando ${label}`} />}
       fallback={({ retry }) => (
         <section className="remote-state">
           <p className="eyebrow">Falha no carregamento</p>
-          <h1>Atividade indisponível</h1>
+          <h1>Módulo de {label} indisponível</h1>
           <button type="button" onClick={retry}>
             Tentar novamente
           </button>
         </section>
       )}
       onError={(error) => {
-        captureHostError(error, { moduleName: "activity" });
+        captureHostError(error, { moduleName: name });
       }}
       moduleLifeCycleEvent={{
         onMounted: () => {
-          markRemoteReady("activity");
+          markRemoteReady(name);
         },
       }}
     />
@@ -50,31 +63,11 @@ export function RemoteContent({
 }) {
   switch (activeModule) {
     case "student":
-      return (
-        <Suspense fallback={<RemoteSkeleton label="Carregando módulo de estudantes" />}>
-          <StudentApp />
-        </Suspense>
-      );
-    case "activity":
-      return <ActivityModule />;
     case "institution":
-      return (
-        <Suspense fallback={<RemoteSkeleton label="Carregando módulo de instituições" />}>
-          <InstitutionApp />
-        </Suspense>
-      );
+    case "activity":
     case "dashboard":
-      return (
-        <Suspense fallback={<RemoteSkeleton label="Carregando dashboard" />}>
-          <DashboardApp />
-        </Suspense>
-      );
     case "admin":
-      return (
-        <Suspense fallback={<RemoteSkeleton label="Carregando administração" />}>
-          <AdminApp />
-        </Suspense>
-      );
+      return <RemoteModule name={activeModule} />;
     default:
       return (
         <section className="remote-state">

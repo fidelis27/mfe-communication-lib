@@ -2,10 +2,12 @@
 
 ## Runtime model
 
-The host loads each remote on demand through Module Federation. Each remote
-shares React, React DOM, `@mfe/shared`, and `@tanstack/react-query` as federation
-singletons. Each remote creates its own `QueryClient`; query data is isolated by
-MFE and is not shared across remotes.
+The host loads each module on demand through `@lib-core-mfe/module-frontend`.
+Every module bundles its own React, React DOM, `@mfe/shared`, and
+`@tanstack/react-query` runtime. Each remote creates its own `QueryClient`;
+query data is isolated by MFE and is not shared across remotes. The resulting
+dependency duplication and route-level impact are measured in the
+[migration comparison](./performance-lib-comparison.md).
 The ownership decision is documented in
 [ADR-0001](./adr/0001-query-client-per-remote.md).
 

@@ -13,33 +13,59 @@ $env:DB_PASSWORD = if ($env:DB_PASSWORD) { $env:DB_PASSWORD } else { "" }
 $env:DB_TLS = if ($env:DB_TLS) { $env:DB_TLS } else { "false" }
 $env:OIDC_ISSUER = if ($env:OIDC_ISSUER) { $env:OIDC_ISSUER } elseif ($env:VITE_SUPABASE_URL) { "$($env:VITE_SUPABASE_URL.TrimEnd('/'))/auth/v1" } else { "" }
 $env:OIDC_AUDIENCE = if ($env:OIDC_AUDIENCE) { $env:OIDC_AUDIENCE } else { "authenticated" }
+$env:VITE_MFE_STUDENT_URL = "http://127.0.0.1:4173"
+$env:VITE_MFE_INSTITUTION_URL = "http://127.0.0.1:4175"
+$env:VITE_MFE_ACTIVITY_URL = "http://127.0.0.1:4176"
+$env:VITE_MFE_DASHBOARD_URL = "http://127.0.0.1:4178"
+$env:VITE_MFE_ADMIN_URL = "http://127.0.0.1:4179"
+$env:MFE_HOST_ORIGINS = "http://localhost:4174"
 
-$services = @(
-  @{ Name = "backend"; Path = $backend; Port = 3333 },
-  @{ Name = "student"; Path = (Join-Path $packages "mfe-student"); Port = 4173 },
-  @{ Name = "host"; Path = (Join-Path $packages "host"); Port = 4174 },
-  @{ Name = "institution"; Path = (Join-Path $packages "mfe-institution"); Port = 4175 },
-  @{ Name = "activity"; Path = (Join-Path $packages "mfe-activity"); Port = 4176 },
-  @{ Name = "dashboard"; Path = (Join-Path $packages "mfe-dashboard"); Port = 4178 },
-  @{ Name = "admin"; Path = (Join-Path $packages "mfe-admin"); Port = 4179 }
+$providers = @(
+  @{ Name = "student"; AppName = "mfe-student"; ModuleName = "student"; Port = 4173 },
+  @{ Name = "institution"; AppName = "mfe-institution"; ModuleName = "institution"; Port = 4175 },
+  @{ Name = "activity"; AppName = "mfe-activity"; ModuleName = "activity"; Port = 4176 },
+  @{ Name = "dashboard"; AppName = "mfe-dashboard"; ModuleName = "dashboard"; Port = 4178 },
+  @{ Name = "admin"; AppName = "mfe-admin"; ModuleName = "admin"; Port = 4179 }
 )
 
-foreach ($service in $services) {
-  $listener = Get-NetTCPConnection -LocalPort $service.Port -State Listen -ErrorAction SilentlyContinue
-  if ($listener) {
-    Write-Host "$($service.Name): port $($service.Port) already in use; skipping"
+Push-Location $root
+try {
+  npm run build --workspace=@mfe/shared
+  if ($LASTEXITCODE -ne 0) { throw "Shared package build failed." }
+
+  npm run build --workspace=mfe-host --ignore-scripts
+  if ($LASTEXITCODE -ne 0) { throw "Host build failed." }
+
+  npm run build:module --workspaces --if-present --ignore-scripts
+  if ($LASTEXITCODE -ne 0) { throw "Remote module builds failed." }
+} finally {
+  Pop-Location
+}
+
+if (-not (Test-Path (Join-Path $backend "go.mod"))) {
+  throw "Backend repository not found at $backend. Clone https://github.com/fidelis27/secretaria-backend beside this repository."
+}
+if (-not (Get-NetTCPConnection -LocalPort 3333 -State Listen -ErrorAction SilentlyContinue)) {
+  Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$backend'; go run ./cmd/server" | Out-Null
+  Write-Host "Started backend on port 3333"
+}
+
+foreach ($provider in $providers) {
+  if (Get-NetTCPConnection -LocalPort $provider.Port -State Listen -ErrorAction SilentlyContinue) {
+    Write-Host "$($provider.Name): port $($provider.Port) already in use; skipping"
     continue
   }
 
-  if ($service.Name -eq "backend") {
-    if (-not (Test-Path (Join-Path $service.Path "go.mod"))) {
-      throw "Backend repository not found at $($service.Path). Clone https://github.com/fidelis27/secretaria-backend beside this repository."
-    }
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$($service.Path)'; go run ./cmd/server" | Out-Null
-  } else {
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$($service.Path)'; npx vite preview --host 127.0.0.1 --port $($service.Port)" | Out-Null
-  }
-  Write-Host "Started $($service.Name) on port $($service.Port)"
+  $modulesPath = Join-Path (Join-Path $packages $provider.AppName) "dist\modules"
+  $command = "Set-Location '$root'; node ./scripts/module-serve.mjs '$modulesPath' '$($provider.AppName)' '$($provider.ModuleName)' '$($provider.Port)' 'http://localhost:4174'"
+  Start-Process powershell -ArgumentList "-NoExit", "-Command", $command | Out-Null
+  Write-Host "Started $($provider.Name) module provider on port $($provider.Port)"
+}
+
+if (-not (Get-NetTCPConnection -LocalPort 4174 -State Listen -ErrorAction SilentlyContinue)) {
+  $hostPackage = Join-Path $packages "host"
+  Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$hostPackage'; npx vite preview --host 127.0.0.1 --port 4174 --strictPort" | Out-Null
+  Write-Host "Started host preview on port 4174"
 }
 
 $healthUrl = "http://localhost:$($env:PORT)/health"

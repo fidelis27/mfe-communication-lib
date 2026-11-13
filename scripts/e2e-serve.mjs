@@ -9,7 +9,7 @@ import { serveModules } from "@lib-core-mfe/module-frontend/server";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const env = {
   ...process.env,
-  VITE_API_URL: "http://127.0.0.1:3333",
+  VITE_API_URL: "http://127.0.0.1:4280",
   VITE_SUPABASE_URL: "https://e2e.supabase.co",
   VITE_SUPABASE_ANON_KEY: "e2e-anon-key",
   VITE_MFE_STUDENT_URL: "http://127.0.0.1:4274",
@@ -18,23 +18,22 @@ const env = {
   VITE_MFE_DASHBOARD_URL: "http://127.0.0.1:4278",
   VITE_MFE_ADMIN_URL: "http://127.0.0.1:4279",
 };
-const workspaces = [
-  ["host", 4273],
-  ["mfe-student", 4274],
-  ["mfe-institution", 4275],
-  ["mfe-activity", 4276],
-  ["mfe-dashboard", 4278],
-  ["mfe-admin", 4279],
+const providers = [
+  { appName: "mfe-student", moduleName: "student", port: 4274 },
+  { appName: "mfe-institution", moduleName: "institution", port: 4275 },
+  { appName: "mfe-activity", moduleName: "activity", port: 4276 },
+  { appName: "mfe-dashboard", moduleName: "dashboard", port: 4278 },
+  { appName: "mfe-admin", moduleName: "admin", port: 4279 },
 ];
 const viteBin = path.join(root, "node_modules", "vite", "bin", "vite.js");
 const children = [];
 let stopping = false;
-let activityModuleServer;
+const moduleServers = [];
 
 function stopServers() {
   if (stopping) return;
   stopping = true;
-  activityModuleServer?.close();
+  for (const server of moduleServers) server.close();
   for (const child of children) {
     if (child.exitCode === null) child.kill("SIGTERM");
   }
@@ -64,11 +63,11 @@ function runBuilds() {
   };
 
   runNpm(["run", "build", "--workspace=@mfe/shared"], "Shared package build");
+  runNpm(["run", "build", "--workspace=mfe-host", "--ignore-scripts"], "Host build");
   runNpm(
     [
       "run",
-      "build",
-      "--workspace=mfe-host",
+      "build:module",
       "--workspace=mfe-student",
       "--workspace=mfe-institution",
       "--workspace=mfe-activity",
@@ -76,18 +75,14 @@ function runBuilds() {
       "--workspace=mfe-admin",
       "--ignore-scripts",
     ],
-    "Frontend workspace builds",
-  );
-  runNpm(
-    ["run", "build:module", "--workspace=mfe-activity", "--ignore-scripts"],
-    "Activity module build",
+    "Remote module builds",
   );
 }
 
 async function waitForServer(url, child) {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
+    if (child && child.exitCode !== null) {
       throw new Error(`Preview server exited before becoming ready: ${url}.`);
     }
 
@@ -101,71 +96,89 @@ async function waitForServer(url, child) {
   throw new Error(`Preview server did not become ready: ${url}.`);
 }
 
-async function startActivityModuleServer() {
-  const modulesPath = path.join(
-    root,
-    "modules",
-    "frontend",
-    "packages",
-    "mfe-activity",
-    "dist",
-    "modules",
-  );
-  const middleware = serveModules({
-    modulesPath,
-    appName: "mfe-activity",
-    basePath: "/api/modules",
-    corsOrigins: ["http://127.0.0.1:4273"],
-    include: ["activity"],
+async function startModuleServers() {
+  for (const provider of providers) {
+    const middleware = serveModules({
+      modulesPath: path.join(
+        root,
+        "modules",
+        "frontend",
+        "packages",
+        provider.appName,
+        "dist",
+        "modules",
+      ),
+      appName: provider.appName,
+      basePath: "/api/modules",
+      corsOrigins: ["http://127.0.0.1:4273"],
+      include: [provider.moduleName],
+    });
+    const server = createServer((request, response) => {
+      void middleware(request, response);
+    });
+    moduleServers.push(server);
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(provider.port, "127.0.0.1", resolve);
+    });
+  }
+}
+
+async function startApiServer() {
+  const server = createServer((request, response) => {
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    response.setHeader("Access-Control-Allow-Headers", "authorization, content-type");
+    if (request.method === "OPTIONS") {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
+
+    response.setHeader("Content-Type", "application/json; charset=utf-8");
+    response.end(JSON.stringify([]));
   });
-  activityModuleServer = createServer((request, response) => {
-    void middleware(request, response);
-  });
+  moduleServers.push(server);
   await new Promise((resolve, reject) => {
-    activityModuleServer.once("error", reject);
-    activityModuleServer.listen(4276, "127.0.0.1", resolve);
+    server.once("error", reject);
+    server.listen(4280, "127.0.0.1", resolve);
   });
 }
 
 try {
   runBuilds();
-  await startActivityModuleServer();
-
-  for (const [workspace, port] of workspaces) {
-    if (workspace === "mfe-activity") {
-      await waitForServer("http://127.0.0.1:4276/api/modules/__modules_configuration", {
-        exitCode: null,
-      });
-      continue;
-    }
-
-    const child = spawn(
-      process.execPath,
-      [viteBin, "preview", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
-      {
-        cwd: path.join(root, "modules", "frontend", "packages", workspace),
-        env,
-        stdio: "inherit",
-      },
-    );
-    children.push(child);
-    child.on("error", (error) => {
-      console.error(`Failed to start ${workspace} preview:`, error);
-      process.exitCode = 1;
-      stopServers();
-    });
-    child.on("exit", (code) => {
-      if (!stopping && code !== 0) {
-        console.error(`${workspace} preview exited with code ${code}.`);
-        process.exitCode = 1;
-        stopServers();
-      }
-    });
-    const entrypoint = workspace === "host" ? "/" : "/assets/remoteEntry.js";
-    await waitForServer(`http://127.0.0.1:${port}${entrypoint}`, child);
+  await startApiServer();
+  await startModuleServers();
+  await waitForServer("http://127.0.0.1:4280/students");
+  for (const provider of providers) {
+    await waitForServer(`http://127.0.0.1:${provider.port}/api/modules/__modules_configuration`);
   }
 
-  console.log("Host, four federation remotes, and the activity module provider are ready.");
+  const host = spawn(
+    process.execPath,
+    [viteBin, "preview", "--host", "127.0.0.1", "--port", "4273", "--strictPort"],
+    {
+      cwd: path.join(root, "modules", "frontend", "packages", "host"),
+      env,
+      stdio: "inherit",
+    },
+  );
+  children.push(host);
+  host.on("error", (error) => {
+    console.error("Failed to start host preview:", error);
+    process.exitCode = 1;
+    stopServers();
+  });
+  host.on("exit", (code) => {
+    if (!stopping && code !== 0) {
+      console.error(`Host preview exited with code ${code}.`);
+      process.exitCode = 1;
+      stopServers();
+    }
+  });
+  await waitForServer("http://127.0.0.1:4273/", host);
+
+  console.log("Host and all five manifest-based module providers are ready.");
   await new Promise((resolve) => {
     children[0].once("exit", resolve);
   });

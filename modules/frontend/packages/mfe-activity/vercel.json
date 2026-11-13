@@ -1,4 +1,5 @@
 {
+  "buildCommand": "npm run build && npm run build:module --ignore-scripts",
   "functions": {
     "api/modules/[...path].ts": {
       "includeFiles": "dist/modules/**"

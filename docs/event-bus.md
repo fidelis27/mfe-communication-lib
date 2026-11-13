@@ -1,6 +1,10 @@
 # Event bus local
 
-O bus local do monorepo usa o `globalThis.__mfeBus` como singleton compartilhado entre host e remotes. Ele mantém filas por canal e entrega eventos imediatamente quando há listeners ativos.
+O bus local usa `globalThis.__mfeBus` como estado compartilhado entre o Host e
+os modulos. Como cada bundle inclui sua propria copia de `@mfe/shared`, o
+estado do bus (listeners, filas e TTL) precisa viver no objeto global da pagina,
+nao em variaveis de modulo. Inicializar outra copia da biblioteca nao reinicia
+nem substitui esse estado.
 
 ## Convenção de canais
 

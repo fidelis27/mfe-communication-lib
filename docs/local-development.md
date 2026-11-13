@@ -196,132 +196,90 @@ ws://localhost:3333/events (subprotocol: bearer.<access-token>)
 Na raiz do projeto:
 
 ```powershell
-npm install
+npm ci --legacy-peer-deps
 ```
-
-A versão disponível do plugin Federation usada pelo projeto é `@originjs/vite-plugin-federation@1.4.1`.
 
 ## 6. Build dos MFEs
 
-Execute os builds diretamente no diretório de cada pacote:
+O Host e os providers podem ser compilados em conjunto. O build de módulo de
+cada MFE produz o bundle IIFE em `dist/modules`:
 
 ```powershell
-npx vite build --config modules/frontend/packages/mfe-student/vite.config.ts
-npx vite build --config modules/frontend/packages/mfe-institution/vite.config.ts
-npx vite build --config modules/frontend/packages/mfe-activity/vite.config.ts
-npx vite build --config modules/frontend/packages/mfe-dashboard/vite.config.ts
-npx vite build --config modules/frontend/packages/host/vite.config.ts
+npm run build --workspace=@mfe/shared
+npm run build --workspace=mfe-host
+npm run build:module --workspaces --if-present
 ```
 
-Ou, dentro de cada pacote:
+Os builds standalone continuam disponiveis no script `build` de cada
+workspace; eles sao usados para desenvolver e implantar a aplicacao isolada.
 
 ```powershell
-Set-Location modules/frontend/packages/mfe-student
-npx vite build
+npm run build --workspace=mfe-activity
 ```
 
-## 7. Subir os remotes e o Host
+## 7. Subir os providers e o Host
 
-Copie `.env.example` para `.env` na raiz quando precisar sobrescrever portas,
-URLs dos remotes ou a API. O Host lê `VITE_MFE_*_URL` durante o build; sem
-essas variáveis, mantém os endereços locais documentados abaixo.
+Copie `.env.example` para `.env` na raiz quando precisar sobrescrever as
+origens dos providers ou a API. As variáveis `VITE_MFE_*_URL` devem conter as
+origens, sem caminho de manifesto. Para desenvolvimento local, o script
+configura as portas de cada provider e a origem permitida do Host.
 
-Para iniciar backend, Host e todos os remotes com um comando no Windows:
+Para iniciar backend, Host e os cinco providers no Windows:
 
 ```powershell
 npm run dev:local
 ```
 
-O script abre um terminal PowerShell por serviço e não encerra processos que
-já estejam usando a porta esperada. Para parar os processos dessas portas:
+O script compila os módulos, inicia o middleware local `serveModules` para cada
+provider e abre o preview do Host. Ele também tenta iniciar o backend; o
+MariaDB deve estar ativo no XAMPP. O Host fica em
+[http://localhost:4174/](http://localhost:4174/). Para encerrar os processos:
 
 ```powershell
 npm run stop:local
 ```
 
-Com os serviços ativos, valide o fluxo operacional completo com um único
-comando:
+O comando de validação verifica health, autenticação, CORS, métricas,
+WebSocket, os cinco manifestos e os respectivos assets:
 
 ```powershell
 npm run validate:local
 ```
 
-Ele verifica health, autenticação, CORS, métricas, WebSocket e os
-`remoteEntry.js` do Host e dos cinco remotes. A API e a origem podem ser
-alteradas pelas variáveis `API_BASE_URL` e `CHECK_ORIGIN`.
+Pode-se alterar a API e a origem usada na validação com `API_BASE_URL` e
+`CHECK_ORIGIN`. A origem dos módulos deve coincidir com `MFE_HOST_ORIGINS` no
+provider; localmente, use `http://localhost:4174`.
 
-O script pressupõe que o MariaDB já esteja ativo no XAMPP. Se o banco ainda
-não estiver rodando, inicie-o antes do comando acima.
+| Componente  | Host local do provider  |
+| ----------- | ----------------------- |
+| Student     | `http://localhost:4173` |
+| Institution | `http://localhost:4175` |
+| Activity    | `http://localhost:4176` |
+| Dashboard   | `http://localhost:4178` |
+| Admin       | `http://localhost:4179` |
 
-Cada processo deve ficar em um terminal separado. Primeiro faça os builds e depois inicie os previews:
+Cada manifesto fica em `/api/modules/__modules_configuration`. Os assets
+listados no manifesto são servidos pelo middleware com metadados SRI.
 
-### Student
+## 8. Verificar os manifestos
 
-```powershell
-Set-Location modules/frontend/packages/mfe-student
-npx vite preview --host 127.0.0.1 --port 4173
-```
-
-### Institution
-
-```powershell
-Set-Location modules/frontend/packages/mfe-institution
-npx vite preview --host 127.0.0.1 --port 4175
-```
-
-### Activity
+Por exemplo, para consultar o manifesto Student e o bundle indicado por ele:
 
 ```powershell
-Set-Location modules/frontend/packages/mfe-activity
-npx vite preview --host 127.0.0.1 --port 4176
+$manifest = Invoke-RestMethod "http://localhost:4173/api/modules/__modules_configuration" -Headers @{ Origin = "http://localhost:4174" }
+$manifest.modules.student.scripts[0]
 ```
 
-### Dashboard
-
-```powershell
-Set-Location modules/frontend/packages/mfe-dashboard
-npx vite preview --host 127.0.0.1 --port 4178
-```
-
-### Host
-
-```powershell
-Set-Location modules/frontend/packages/host
-npx vite preview --host 127.0.0.1 --port 4174
-```
-
-Abra a aplicação em:
-
-[http://localhost:4174/](http://localhost:4174/)
-
-O Host carrega os remotes nestes endereços:
-
-| Componente  | URL do remote                                 |
-| ----------- | --------------------------------------------- |
-| Student     | `http://localhost:4173/assets/remoteEntry.js` |
-| Institution | `http://localhost:4175/assets/remoteEntry.js` |
-| Activity    | `http://localhost:4176/assets/remoteEntry.js` |
-| Dashboard   | `http://localhost:4178/assets/remoteEntry.js` |
-
-## 8. Verificar os remotes
-
-```powershell
-curl.exe -I http://localhost:4173/assets/remoteEntry.js
-curl.exe -I http://localhost:4175/assets/remoteEntry.js
-curl.exe -I http://localhost:4176/assets/remoteEntry.js
-curl.exe -I http://localhost:4178/assets/remoteEntry.js
-curl.exe -I http://localhost:4174/
-```
-
-Todos devem retornar `HTTP/1.1 200 OK`.
+`npm run validate:local` verifica todos os manifestos, os assets esperados e
+as respostas CORS. O Host deve retornar `200` em
+`http://localhost:4174/`.
 
 ## 9. Testes E2E com Playwright
 
-Os testes E2E constroem o Host e os cinco remotes e os servem como previews
-locais. O Playwright navega pela federation real; não são usados mocks de
-componentes remotos. API e WebSocket são interceptados no navegador para manter
-os cenários determinísticos, portanto não é necessário iniciar o backend,
-MariaDB ou Supabase.
+Os testes constroem o Host e os cinco bundles IIFE, iniciam os providers locais
+com o middleware real `serveModules` e carregam os módulos sem mocks de
+componentes. API e WebSocket são interceptados na rede para manter os cenários
+determinísticos; não é necessário iniciar o backend, MariaDB ou Supabase.
 Essa separação entre integração de browser e validação dos serviços está
 registrada no [ADR-0002](./adr/0002-federation-e2e-testing.md).
 
@@ -338,8 +296,9 @@ Execute os testes:
 npm run test:e2e
 ```
 
-O comando gera os builds, inicia previews nas portas `4273`, `4274`, `4275`,
-`4276`, `4278` e `4279`, executa os cenários e encerra os servidores ao final.
+O comando gera os builds, inicia o Host e os providers nas portas `4273`,
+`4274`, `4275`, `4276`, `4278` e `4279`, executa os cenários e encerra os
+servidores ao final.
 Não inicie outros previews nessas portas ao mesmo tempo. O ambiente de
 autenticação usa valores fictícios exclusivos para os testes. Para abrir o
 relatório HTML após a execução:
@@ -350,8 +309,9 @@ npx playwright show-report
 
 Em caso de falha, screenshots, vídeos e traces ficam em `test-results/`; o CI
 também publica o relatório e esses arquivos como artefato. Os testes cobrem
-navegação pelos cinco remotes, cadastro de estudante, atualização por evento
-entre Activity e Dashboard, erro ao carregar um remote e respostas HTTP 401.
+navegação pelos cinco módulos, cadastro de estudante, atualização por evento
+entre Activity e Dashboard, falha do manifesto com retry, fallback de falha e
+respostas HTTP 401.
 
 ## Problemas comuns
 
@@ -372,7 +332,7 @@ sistema são instaladas junto com o navegador por `npx playwright install
 Descubra o processo:
 
 ```powershell
-Get-NetTCPConnection -LocalPort 3333,4173,4174,4175,4176,4178 -State Listen
+Get-NetTCPConnection -LocalPort 3333,4173,4174,4175,4176,4178,4179 -State Listen
 ```
 
 Encerre um processo específico somente quando tiver certeza do PID:
@@ -381,13 +341,19 @@ Encerre um processo específico somente quando tiver certeza do PID:
 Stop-Process -Id <PID> -Force
 ```
 
-### `npm run preview` procura `dist` no lugar errado
+### Executar um MFE standalone
 
-Como o projeto usa npm workspaces, execute o Vite a partir do pacote com `npx vite preview`, depois de gerar o build local. Isso evita que o script seja resolvido a partir da raiz errada.
+Os scripts standalone continuam disponiveis por workspace. Execute o preview no
+diretorio do pacote, depois de gerar o build standalone, para que o Vite use o
+`dist` correto. O Host integrado deve ser iniciado por `npm run dev:local`,
+que tambem sobe os providers de manifesto.
 
-### Host responde, mas um remote não carrega
+### Host responde, mas um modulo nao carrega
 
-Confirme que o remote correspondente está ativo e que seu `remoteEntry.js` retorna `200`. O Host não consegue carregar um remote que ainda não foi buildado ou está em outra porta.
+Confirme que o manifesto do provider responde em
+`/api/modules/__modules_configuration`, que lista o módulo esperado e que o
+asset correspondente retorna `200`. Verifique também `MFE_HOST_ORIGINS` no
+provider e se o `VITE_MFE_*_URL` do Host aponta para a origem correta.
 
 ### Backend não conecta no banco
 

@@ -1,6 +1,7 @@
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { inlineModuleCss } from "../../vite-module-css-plugin";
 
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 const sentryPlugins = sentryAuthToken
@@ -17,7 +18,7 @@ const sentryPlugins = sentryAuthToken
 
 export default defineConfig(({ mode }) => {
   return {
-    plugins: [react(), ...sentryPlugins],
+    plugins: [react(), inlineModuleCss("activity"), ...sentryPlugins],
     define: {
       "process.env.NODE_ENV": JSON.stringify(mode === "production" ? "production" : "development"),
     },

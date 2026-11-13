@@ -34,16 +34,19 @@ Interface MFE
 - MariaDB/MySQL para persistencia do prototipo.
 - Nenhum repositorio de negocio em memoria; testes de integracao usam banco de
   teste MariaDB/MySQL.
-- `@originjs/vite-plugin-federation` para Module Federation no host e nos
-  remotes, aproveitando a dependência já declarada no workspace frontend.
+- `@lib-core-mfe/module-frontend` para registrar MFEs como bundles IIFE,
+  distribuir manifesto com SRI pelas Vercel Functions e carregá-los no Host.
+- Cada módulo empacota sua própria cópia de React e dependências; não há
+  singleton de runtime. O estado compartilhado de autenticação e do bus usa
+  pontes explicitamente armazenadas em `globalThis`.
 - WebSocket como transporte realtime do protótipo.
 - `window.bus`/`EventTarget` somente para comunicação local entre MFEs na mesma
   página; não substitui o canal backend.
 
-Module Federation real e obrigatorio no MVP. O host deve carregar remotes por
-manifesto ou URL configuravel, compartilhar React como singleton e validar o
-carregamento independente de cada MFE. Rotas simples podem existir como
-fallback local, mas nao substituem a demonstracao principal.
+O Host deve carregar os cinco MFEs pelo manifesto da biblioteca, verificar a
+integridade dos bundles e expor loading, fallback com retry e erros reportados.
+O Host e cada provider sao implantados independentemente; cada provider
+configura CORS para as origens aprovadas do Host.
 
 ## 4. Padroes de desenvolvimento
 
@@ -226,7 +229,7 @@ src/
 	hooks/            # comportamento de UI e eventos
 	application/      # casos de uso do frontend
 	domain/           # tipos e regras locais do dominio
-	infrastructure/   # HTTP, WebSocket e Module Federation
+	infrastructure/   # HTTP, WebSocket e carregamento de modulos
 	styles/            # tokens e estilos do MFE
 ```
 
@@ -385,8 +388,8 @@ dados pessoais completos nos logs.
 - Memoria local nao representa concorrencia, reinicio ou escalabilidade.
 - Eventos em memoria nao sobrevivem a falhas.
 - A ausencia de um banco pode ocultar constraints de unicidade e transacao.
-- Module Federation real, remotes indisponiveis e reconexao realtime sao riscos
-  centrais do primeiro incremento.
+- Carregamento de modulos, providers indisponiveis e reconexao realtime sao
+  riscos centrais da arquitetura.
 - Transferencias exigem consistencia entre o vinculo de origem e o de destino.
 - Dados pessoais exigem minimizacao, mascaramento, criptografia e auditoria de
   acesso conforme a politica de privacidade do produto.
@@ -406,7 +409,7 @@ dados pessoais completos nos logs.
 
 ### Dia 2 - frontend e integracao
 
-1. Configurar Module Federation real e integrar o host a todos os MFEs.
+1. Configurar o carregamento por manifesto e integrar o Host a todos os MFEs.
 2. Configurar WebSocket e validar eventos realtime correlacionados.
 3. Implementar Institution, Student, Admin, Activity e Dashboard.
 4. Adicionar estados de interface e tratamento de erros.
@@ -456,7 +459,7 @@ Este bloco prevalece sobre qualquer referencia anterior conflitante:
 - O banco MariaDB/MySQL deve estar em instancia persistente nos ambientes
   publicados.
 - Transferencia deve alterar vinculo de origem e destino na mesma transacao.
-- WebSocket e Module Federation real sao obrigatorios no prototipo.
+- WebSocket e carregamento real dos cinco modulos sao obrigatorios no prototipo.
 - O plano de entrega tem tres dias.
 - Antes da implementacao, criar o schema MariaDB, os contratos compartilhados,
   o contrato WebSocket e os testes de persistencia.

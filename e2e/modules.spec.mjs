@@ -20,17 +20,21 @@ async function setup(page, options = {}) {
   return { api, socket };
 }
 
-test("host loads all five real remotes through module navigation", async ({ page }) => {
+test("host loads all five real modules through manifest navigation", async ({ page }) => {
   await setup(page);
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Módulos da secretaria" })).toBeVisible();
 
   const modules = [
-    { label: "Estudantes", heading: "Vínculos que acompanham cada trajetória." },
-    { label: "Instituições", heading: "Uma rede de instituições, um só lugar." },
-    { label: "Atividade", heading: "Atividade do sistema." },
-    { label: "Dashboard", heading: "O pulso da operação." },
-    { label: "Admin", heading: "Pessoas e permissões." },
+    { name: "student", label: "Estudantes", heading: "Vínculos que acompanham cada trajetória." },
+    {
+      name: "institution",
+      label: "Instituições",
+      heading: "Uma rede de instituições, um só lugar.",
+    },
+    { name: "activity", label: "Atividade", heading: "Atividade do sistema." },
+    { name: "dashboard", label: "Dashboard", heading: "O pulso da operação." },
+    { name: "admin", label: "Admin", heading: "Pessoas e permissões." },
   ];
 
   for (const module of modules) {
@@ -38,6 +42,7 @@ test("host loads all five real remotes through module navigation", async ({ page
     await expect(
       page.getByRole("main").getByRole("heading", { level: 1, name: module.heading }),
     ).toBeVisible();
+    await expect(page.locator(`style[data-module-styles="${module.name}"]`)).toHaveCount(1);
   }
 });
 
@@ -156,15 +161,17 @@ test("WebSocket event appears in Activity and refreshes Dashboard", async ({ pag
   await expect(page.getByText("e2e-correlation")).toBeVisible();
 });
 
-test("failed remote displays the shell error boundary", async ({ page }) => {
+test("failed module shows fallback and offers retry", async ({ page }) => {
   await setup(page);
-  await page.route("http://127.0.0.1:4279/assets/remoteEntry.js", (route) => route.abort());
+  await page.route("http://127.0.0.1:4279/api/modules/__modules_configuration", (route) =>
+    route.abort(),
+  );
   await page.goto("/");
   await page.getByRole("link", { name: /Admin/ }).click();
 
-  await expect(page.getByRole("alert")).toContainText(
-    "Não foi possível carregar este módulo agora.",
-  );
+  await expect(
+    page.getByRole("heading", { name: "Módulo de administração indisponível" }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Tentar novamente" })).toBeVisible();
 });
 

@@ -9,6 +9,9 @@ const corsOrigins = process.env.MFE_HOST_ORIGINS?.split(",")
 if (!corsOrigins?.length) {
   throw new Error("MFE_HOST_ORIGINS must contain the Host origin(s) allowed to load this module.");
 }
+if (corsOrigins.some((origin) => new URL(origin).origin !== origin)) {
+  throw new Error("MFE_HOST_ORIGINS must contain exact origins without paths or trailing slashes.");
+}
 
 const handleModules = serveModules({
   modulesPath: path.resolve(process.cwd(), "dist/modules"),

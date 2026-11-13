@@ -6,15 +6,15 @@ Accepted.
 
 ## Context
 
-The five remotes query and mutate backend resources independently while running
-in the same browser page through Module Federation. They need a consistent
-TanStack Query runtime, but sharing one cache across separately deployed MFEs
-would couple their query keys, invalidation behavior and lifecycles.
+The five modules query and mutate backend resources independently while running
+in the same browser page. `@lib-core-mfe/module-frontend` bundles each module's
+React and dependencies independently, so the React and TanStack Query runtimes
+are not shared between modules. Sharing one cache across separately deployed
+MFEs would couple their query keys, invalidation behavior and lifecycles.
 
 ## Decision
 
-- Share `@tanstack/react-query` as a Module Federation singleton in every
-  remote.
+- Bundle a separate TanStack Query runtime in each module.
 - Create one `QueryClient` in each remote's root and provide it only to that
   remote's component tree.
 - Keep cache keys feature-specific and include the API URL and resource
@@ -26,13 +26,13 @@ would couple their query keys, invalidation behavior and lifecycles.
 
 - **One cache in the host or `@mfe/shared`:** rejected because it creates
   cross-remote cache ownership and invalidation coupling.
-- **A separate Query library runtime in each remote:** rejected because
-  providers and hooks may resolve to different React contexts under
-  federation.
+- **One Query runtime and cache in the Host:** rejected because it couples
+  ownership and invalidation across independently deployed modules.
 
 ## Consequences
 
 Cache entries and mutations remain isolated to the remote that owns them, while
-all remotes use the same federated Query runtime. Domain events are the
-cross-remote synchronization mechanism; they do not expose one remote's cache
-to another.
+each module uses its own Query runtime and cache. Domain events are the
+cross-module synchronization mechanism; they do not expose one module's cache
+to another. The cost of the duplicated runtimes is tracked in
+[the performance comparison](../performance-lib-comparison.md).
