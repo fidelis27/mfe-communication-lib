@@ -48,6 +48,16 @@ nao use `*`. No Host, cada `VITE_MFE_*_URL` aponta para a origem do provider,
 sem sufixo de arquivo de entrada. O fallback SPA dos providers deve excluir
 `/api` para que o manifesto e os bundles sejam atendidos pela Vercel Function.
 
+A Function procura `dist/modules` tanto a partir do Root Directory do projeto
+quanto da raiz do repositorio, porque o diretorio de trabalho na Vercel pode
+ser qualquer um dos dois. Se `MFE_HOST_ORIGINS` faltar ou for invalido, ou se
+`dist/modules` nao existir, o manifesto responde `500` com um JSON `error`
+explicando a causa, e a mesma mensagem aparece nos logs da Function.
+
+Os projetos de producao seguem o padrao `mfe-communication-lib-<pacote>`, e o
+`.env.production` do Host aponta para `https://mfe-communication-lib-mfe-*.vercel.app`.
+Variaveis definidas no projeto Vercel do Host tem precedencia sobre esse arquivo.
+
 A chave anon/public e apropriada para o navegador; a seguranca dos dados da
 aplicacao continua no backend Go, que exige JWT e verifica o usuario local.
 O frontend persiste e renova a sessao pelo SDK Supabase. HTTP usa
