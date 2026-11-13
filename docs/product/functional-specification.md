@@ -29,7 +29,7 @@ local database users should access protected operations.
 ### Included behavior
 
 1. A navigable shell with entry points for Institutions, Students, Activity,
-   Dashboard, and Administration, composed through Module Federation.
+   Dashboard, and Administration, composed through the module manifest runtime.
 2. Institution listing and registration, with editing and deactivation.
 3. Student listing and registration by institution.
 4. Enrollment suspension, reopening, and transfer, while preserving history.

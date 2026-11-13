@@ -26,14 +26,18 @@ modules/frontend/packages/
 ```
 
 Each MFE owns its UI, feature API modules and TanStack Query hooks under
-`src/features/<feature>/`. The host loads remote applications at runtime through
-Module Federation. React, React DOM, `@mfe/shared`, and
-`@tanstack/react-query` are shared singletons. Every remote creates a separate
-`QueryClient`, keeping its cache isolated from the other MFEs.
+`src/features/<feature>/`. Each provider also has a module entry and an IIFE
+build. The host loads these builds with `<Module>` using a manifest served by a
+Vercel Function. Each module bundles its own React and dependencies; they are
+not runtime singletons. Every remote creates a separate `QueryClient`, keeping
+its cache isolated from the other MFEs.
 The host and remotes use shared UI primitives and semantic design tokens from
 `@mfe/shared`. Each application stylesheet is a Vite CSS Module beneath its
-own generated root class; federated remotes must not add global element or
-class selectors. The shared UI exports the `@mfe/shared/ui` subpath.
+own generated root class; module CSS is injected with the module bundle, and
+remotes must not add global element or class selectors. The shared UI exports
+the `@mfe/shared/ui` subpath. Bundled copies of `@mfe/shared` use
+`globalThis.__mfeBus` for page-wide event state and the host's global Supabase
+auth bridge for session access.
 
 The host groups authentication, navigation, remote rendering, and domain-event
 publishing under `packages/host/src/features/`. The Admin remote keeps its
@@ -63,7 +67,7 @@ requests.
 
 ## Deployment
 
-The host and each MFE are deployed as separate Vercel projects, each building from its package directory. The host resolves remote entry URLs from `VITE_MFE_*_URL`. Frontend API requests use `VITE_API_URL`; authentication uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+The host and each MFE are deployed as separate Vercel projects, each building from its package directory. Each MFE deployment serves its module manifest and integrity-checked module assets from a Vercel Function; the host resolves provider origins from `VITE_MFE_*_URL`. Set `MFE_HOST_ORIGINS` in each provider project to the allowed Host origins. Frontend API requests use `VITE_API_URL`; authentication uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 
 The backend API and its data model are maintained in the separate `secretaria-backend` repository.
 

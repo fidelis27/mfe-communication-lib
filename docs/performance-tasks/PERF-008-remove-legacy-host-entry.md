@@ -14,7 +14,7 @@ build ativo.
 ## Fora do escopo
 
 - Refatorar a navegacao do Host.
-- Alterar Module Federation.
+- Alterar o carregamento de modulos.
 
 ## Validacao
 

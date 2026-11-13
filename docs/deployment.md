@@ -14,9 +14,11 @@ Render: secretaria-backend (Go)
   └── MariaDB/MySQL persistente
 ```
 
-O backend vive em `fidelis27/secretaria-backend`; o Host e os MFEs continuam
-em `fidelis27/mfe-communication`. `@mfe/shared` e compartilhado como singleton
-para que os remotes usem a mesma sessao Supabase iniciada pelo Host.
+O backend vive em `fidelis27/secretaria-backend`; o Host e os MFEs estao neste
+repositorio. Cada MFE e implantado como site estatico e usa uma Vercel Function
+para servir o manifesto e os bundles do modulo por meio de `serveModules`.
+`@mfe/shared` e empacotado em cada modulo; suas copias usam o bus em
+`globalThis.__mfeBus` e a ponte global de autenticacao Supabase do Host.
 
 ## Supabase Auth
 
@@ -38,6 +40,12 @@ VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon-public-key>
 VITE_API_URL=https://secretaria-backend.onrender.com
 ```
+
+No projeto Vercel de cada provider, defina `MFE_HOST_ORIGINS` como uma lista
+separada por virgulas das origens exatas do Host autorizadas a ler o manifesto
+e os bundles. Configure as origens de preview somente se forem necessarias;
+nao use `*`. No Host, cada `VITE_MFE_*_URL` aponta para a origem do provider,
+sem sufixo de arquivo de entrada.
 
 A chave anon/public e apropriada para o navegador; a seguranca dos dados da
 aplicacao continua no backend Go, que exige JWT e verifica o usuario local.

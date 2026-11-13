@@ -72,24 +72,23 @@ depois e sem agrupar melhorias de naturezas diferentes.
 - A paginacao reduz os elementos renderizados; as APIs ainda retornam as listas completas.
 - O historico de atividade continua limitado a 30 eventos pela consulta.
 
-### PERF-006 - Instrumentar carregamento dos remotes
+### PERF-006 - Instrumentar prontidao dos modulos
 
-- Status: instrumentacao implementada e validada; detalhes em
+- Status: instrumentacao implementada e validada; `onMounted` registra o
+  remote-ready quando o modulo e montado. Detalhes em
   [`PERF-006-remote-loading-metrics.md`](./performance-tasks/PERF-006-remote-loading-metrics.md).
-- Branch: `perf/remote-loading-metrics`
-- Escopo: Host e Module Federation.
-- Medir inicio, fim, erro e duracao do carregamento de cada remote.
-- Resultado esperado: distinguir latencia, falha de rede e erro de render.
+- Escopo: Host e ciclo de vida de `<Module>`.
+- Medir a prontidao de cada modulo e reportar erros de carregamento.
 
 ### PERF-007 - Confirmar duplicacao de runtime
 
-- Status: analise concluida; nao ha evidencia suficiente para alterar a
-  configuracao do Federation. Resultados em
+- Status: a analise do runtime anterior e historica e foi supersedida pela
+  decisao ADR-0004. A duplicacao atual e medida em
+  [`performance-lib-comparison.md`](./performance-lib-comparison.md); o
+  relatorio anterior permanece como registro historico em
   [`PERF-007-federation-runtime-analysis.md`](./performance-tasks/PERF-007-federation-runtime-analysis.md).
-- Branch: `perf/federation-runtime-analysis`
-- Escopo: React, React DOM, runtime Federation e chunks comuns.
-- Primeiro passo: medir Network e Coverage em producao/Preview.
-- Alterar configuracao apenas se houver bytes duplicados em runtime.
+- Escopo atual: React, React DOM, dependencias comuns, polling do manifesto e
+  bytes de rota cold/warm.
 
 ### PERF-008 - Remover codigo legado do Host
 

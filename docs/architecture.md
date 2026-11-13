@@ -14,8 +14,8 @@ flowchart LR
 
     subgraph browser["Browser"]
         host["Host shell<br/>auth, routing, one WebSocket"]
-        remotes["5 remote MFEs<br/>institution, student, admin,<br/>activity, dashboard"]
-        host -- "loads at runtime<br/>(Module Federation)" --> remotes
+        remotes["5 MFE modules<br/>institution, student, admin,<br/>activity, dashboard"]
+        host -- "manifest + integrity-checked IIFE" --> remotes
     end
 
     api["secretaria-backend<br/>(external, own repository)"]
@@ -34,16 +34,16 @@ flowchart LR
 
 ## 2. Runtime composition in the browser
 
-The host owns the shell. Remotes are separate builds, loaded lazily. React,
-React DOM, `@mfe/shared`, and `@tanstack/react-query` are federation
-**singletons**. Each remote owns a separate `QueryClient` and cache; query data
-is not shared across MFEs.
+The host owns the shell. Modules are separate IIFE builds, loaded on demand
+from manifests served by provider Vercel Functions. Each module bundles its own
+React and dependencies; they are not shared runtime singletons. Each remote
+owns a separate `QueryClient` and cache; query data is not shared across MFEs.
 
 ```mermaid
 flowchart TB
     subgraph host["Host (Vercel project)"]
         shell["Shell: nav, login, URL routing"]
-        boundary["RemoteBoundary<br/>lazy + Suspense + error boundary"]
+        boundary["Module<br/>loading, retry, lifecycle and errors"]
         ws["useDomainEvents<br/>single WebSocket, backoff reconnect"]
         shell --> boundary
         shell --> ws
@@ -63,7 +63,7 @@ flowchart TB
 
     featureApi["Per-MFE feature API modules<br/>Zod response validation"]
 
-    subgraph shared["@mfe/shared (singleton)"]
+    subgraph shared["@mfe/shared (bundled per module)"]
         contract["Typed event contract"]
         bus["In-page bus<br/>globalThis.__mfeBus"]
         requestApi["Typed request helpers"]
@@ -71,13 +71,14 @@ flowchart TB
         tokens["Design tokens"]
     end
 
-    boundary -- "remoteEntry.js<br/>URL from VITE_MFE_*_URL" --> remotes
+    boundary -- "manifest + SRI-checked module<br/>provider origin from VITE_MFE_*_URL" --> remotes
     host --> shared
+    remotes --> shared
     remotes --> featureApi --> requestApi --> authlib
     remotes --> queries
 ```
 
-If one remote is down, only its `RemoteBoundary` shows "module unavailable"; the shell and the other remotes keep working.
+If one module is down, only its `<Module>` fallback is shown; the shell and the other modules keep working.
 The per-remote cache decision is documented in [ADR-0001](./adr/0001-query-client-per-remote.md).
 
 ---
@@ -212,16 +213,19 @@ flowchart LR
     supa["Supabase Auth"]
 
     gh --> vercel
-    vh -- "VITE_MFE_*_URL" --> v1
-    vh -- "VITE_MFE_*_URL" --> v2
-    vh -- "VITE_MFE_*_URL" --> v3
-    vh -- "VITE_MFE_*_URL" --> v4
-    vh -- "VITE_MFE_*_URL" --> v5
+    vh -- "manifest origin" --> v1
+    vh -- "manifest origin" --> v2
+    vh -- "manifest origin" --> v3
+    vh -- "manifest origin" --> v4
+    vh -- "manifest origin" --> v5
     vh -- "VITE_API_URL" --> api
     vh -- "VITE_SUPABASE_URL" --> supa
 ```
 
-Each package builds and deploys on its own. The host only knows remote origins through build-time variables.
+Each package builds and deploys on its own. The Host's `VITE_MFE_*_URL`
+variables point to provider origins. Each provider serves its allowed module
+and SRI metadata through a Vercel Function; `MFE_HOST_ORIGINS` restricts CORS
+to approved Host origins.
 
 ---
 
@@ -229,8 +233,12 @@ Each package builds and deploys on its own. The host only knows remote origins t
 
 - The host maintains one WebSocket while active. Any remote uses the shared
   authenticated WebSocket fallback only when the host is unavailable.
-- Each remote provides its own TanStack `QueryClient`. Cache keys and data are
-  isolated by remote; the query library itself is a federation singleton.
+- Each remote provides its own TanStack `QueryClient` and bundles its own React,
+  React DOM, TanStack Query, `@mfe/shared`, Sentry, Zod and other dependencies.
+  Cache keys and data are isolated by remote. The duplicated bundle cost is
+  tracked in [the migration performance comparison](./performance-lib-comparison.md).
+- Each copy of `@mfe/shared` accesses the same page-global bus and host auth
+  bridge; module-local state is not used for those cross-module contracts.
 - Query functions pass TanStack Query's `AbortSignal` through feature APIs to
   the shared request helper. Unmounting a remote cancels its in-flight queries.
 - Student creation inserts the returned resource into the Student cache.
@@ -243,6 +251,7 @@ Each package builds and deploys on its own. The host only knows remote origins t
 - Event delivery is best effort; reconnecting does not replay missed events.
 - The frontend does not send `x-correlation-id` with HTTP requests.
 - Backend authorization and emitted event behavior are authoritative; the event contract comparison in section 5 shows the frontend declarations and current backend emissions.
-- Playwright E2E tests load the built Host and five real remotes, while API and
+- Playwright E2E tests load the built Host and five real modules through the
+  library manifest middleware, while API and
   WebSocket traffic is intercepted for deterministic browser checks. The scope
   and limitations are recorded in [ADR-0002](./adr/0002-federation-e2e-testing.md).

@@ -1,6 +1,6 @@
 # School Secretariat — Micro-Frontend Platform
 
-A school-administration prototype built as a **micro-frontend (MFE) ecosystem**. A React host shell composes five independently deployable remotes at runtime with Module Federation, and the remotes stay in sync through a **typed, versioned domain-event contract** delivered over WebSocket.
+A school-administration prototype built as a **micro-frontend (MFE) ecosystem**. A React host shell composes five independently deployable modules at runtime with `@lib-core-mfe/module-frontend`, and the modules stay in sync through a **typed, versioned domain-event contract** delivered over WebSocket.
 
 The Go API that backs it lives in [`secretaria-backend`](https://github.com/fidelis27/secretaria-backend).
 
@@ -22,7 +22,7 @@ Browser
     ├── mfe-admin         users, groups, memberships
     ├── mfe-activity      read-only feed built from domain events
     └── mfe-dashboard     KPIs refreshed by domain events
-    @mfe/shared           event contract, bus, auth, design system (singleton)
+    @mfe/shared           event contract, bus, auth, design system (bundled per module)
             │  HTTPS + WSS, Supabase access token
             ▼
     secretaria-backend (Go) ── MariaDB
@@ -30,15 +30,15 @@ Browser
 
 ### Key design decisions
 
-- **Runtime composition.** Module Federation (`@originjs/vite-plugin-federation`). React, React DOM and `@mfe/shared` are singletons, so every remote shares one session and one event bus. Remote URLs come from `VITE_MFE_*_URL` variables, with local fallbacks for development.
+- **Runtime composition.** Each MFE builds an IIFE that registers with `Modularize`; the host loads it through `<Module>` using a manifest served by a Vercel Function. Each module has its own React runtime. Copies of `@mfe/shared` coordinate through the page-global `__mfeBus` and Supabase auth bridge.
 - **Independent builds and deploys.** Each package has its own Vite build and its own Vercel project.
 - **Two communication layers, each with one job.**
   - _In-page bus_ (`globalThis.__mfeBus`): local coordination between MFEs on the same page. Channels are namespaced `cmd:*` (host to MFE), `evt:*` (MFE to host) and `domain:*`. If nobody is listening, events wait in a per-channel queue (100 items, TTL, default 10 s); once a listener exists, delivery is fan-out.
   - _Backend domain events over WebSocket_: the host owns a single connection and re-dispatches each event to the bus, so remotes never open their own sockets.
 - **Versioned event contract.** Every event carries `eventId`, `type`, `version`, `source`, `correlationId`, `occurredAt` and `payload`. Types are a discriminated union in `@mfe/shared`, and the `useDomainEvents` hook handles authenticated connection, reconnect with backoff, cleanup and typed parsing.
-- **Failure isolation.** Remotes are loaded with `lazy` + `Suspense`, and the host wraps them in an error boundary, so one remote being down does not take the shell with it.
+- **Failure isolation.** `<Module>` exposes loading, retry fallback, lifecycle callbacks and error reporting, so one unavailable module does not take down the shell.
 - **Accessibility as a gate.** Skip link, labelled fields, `aria-live` / `aria-busy` on async regions, `jest-axe` tests per MFE, and a color-contrast check that runs in CI.
-- **Shared visual language.** Semantic tokens and typed UI primitives live in `@mfe/shared`; each application's Vite CSS Module is scoped beneath its own root to prevent remote styles from leaking across the federated page. See [`docs/design-system.md`](docs/design-system.md).
+- **Shared visual language.** Semantic tokens and typed UI primitives live in `@mfe/shared`; each module's CSS is bundled and scoped beneath its own root to prevent styles from leaking across the page. See [`docs/design-system.md`](docs/design-system.md).
 - **Performance by evidence.** The plan in [`docs/performance-improvement-plan.md`](docs/performance-improvement-plan.md) follows one rule: measure, change the smallest thing, measure again. It also lists what _not_ to optimize (no blanket memoization, no preloading every MFE).
 - **Access-denied feedback.** The Student MFE shows friendly 403/404 errors and does not keep previously loaded rows visible after a denied refetch. E2E checks this UI behavior only; backend authorization remains the security boundary. The client does not yet know the user's institution scope, so a global scope selector/filter needs a trusted current-user scope source first.
 
@@ -46,7 +46,7 @@ Browser
 
 ```text
 modules/frontend/packages/
-  host/              shell, routing, federation host
+  host/              shell, routing, module consumer
     src/features/    auth, navigation, remotes, domain events
   mfe-institution/   remote
   mfe-student/       remote
@@ -73,11 +73,12 @@ npm run dev:local     # PowerShell launcher (Windows): starts the host and the r
 
 Build-time variables:
 
-| Variable                                      | Purpose                                                   |
-| --------------------------------------------- | --------------------------------------------------------- |
-| `VITE_API_URL`                                | Backend base URL (HTTP and WebSocket)                     |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Supabase Auth (anon key only; never the service role key) |
-| `VITE_MFE_*_URL`                              | Remote entry origins used by the host                     |
+| Variable                                      | Purpose                                                    |
+| --------------------------------------------- | ---------------------------------------------------------- |
+| `VITE_API_URL`                                | Backend base URL (HTTP and WebSocket)                      |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Supabase Auth (anon key only; never the service role key)  |
+| `VITE_MFE_*_URL`                              | Provider origins used by the host                          |
+| `MFE_HOST_ORIGINS`                            | Comma-separated Host origins allowed by provider manifests |
 
 Details: [`docs/local-development.md`](docs/local-development.md) and [`docs/deployment.md`](docs/deployment.md).
 
@@ -87,7 +88,7 @@ CI runs on every PR and a final **CI gate** job fails if any required job fails:
 
 - ESLint, TypeScript typecheck, Prettier check
 - Vitest unit, integration and accessibility tests
-- Playwright E2E tests against the built Host and five real federation remotes, with deterministic API and WebSocket mocks
+- Playwright E2E tests against the built Host and five real manifest-served modules, with deterministic API and WebSocket mocks
 - Playwright checks that student-write 403 and student-list 403/404 responses are visible and do not leave a success state or stale rows
 - Color-contrast check
 - `npm audit --audit-level=high`
@@ -98,7 +99,7 @@ CI runs on every PR and a final **CI gate** job fails if any required job fails:
 
 | Doc                                                                                                                      | What it covers                                  |
 | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| [`mfe-architecture.md`](docs/mfe-architecture.md)                                                                        | MFE boundaries, federation, deploy model        |
+| [`mfe-architecture.md`](docs/mfe-architecture.md)                                                                        | MFE boundaries, module loading, deploy model    |
 | [`design-system.md`](docs/design-system.md)                                                                              | Shared tokens, UI primitives, and CSS isolation |
 | [`event-bus.md`](docs/event-bus.md)                                                                                      | Channels, queue, TTL, host WebSocket flow       |
 | [`functional-specification.md`](docs/product/functional-specification.md), [`spec-technical.md`](docs/spec-technical.md) | Product and technical specs                     |
@@ -114,4 +115,4 @@ Spec first, in small verified steps. Product decisions and acceptance criteria w
 
 - Prototype scope: it demonstrates the architecture and the main flow (institution → student → event → activity/dashboard), not a finished product.
 - Event delivery is best effort. A transactional outbox is still pending (see the backend ADR 0001).
-- Runtime duplication of shared libraries across remotes is still to be measured before any change (PERF-007).
+- Each module bundles its own React and shared dependencies. The measurable cost and route-level impact are reported in [the migration performance comparison](docs/performance-lib-comparison.md).

@@ -1,30 +1,23 @@
-# PERF-006 - Instrumentar carregamento dos remotes
+# PERF-006 - Instrumentar prontidao dos modulos
 
 ## Objetivo
 
-Medir a duracao e o resultado do carregamento de cada remote no Host.
+Registrar quando cada modulo carregado pelo Host fica montado e pronto.
 
 ## Status e implementacao
 
-Instrumentacao implementada para os cinco remotes. O Host publica o evento
-`mfe:remote-load` no `window`, com `remoteName`, numero da tentativa, fase
-(`start`, `success` ou `error`) e timestamps; os eventos de conclusao incluem
-a duracao em milissegundos. Tambem sao criadas marcas e medidas User Timing
-com o formato `mfe:remote:<nome>:<tentativa>:duration`, disponiveis em
-`performance.getEntriesByType("measure")`.
-
-O erro da importacao e relancado para preservar o fluxo do Error Boundary.
-Erros de render continuam sendo capturados pelo `RemoteBoundary` e enviados ao
-Sentry existente. A medicao identifica falha de importacao, mas nao consegue
-distinguir por si so falha de rede de timeout; isso depende do erro exposto
-pelo runtime do Module Federation. Nao foi adicionado um timeout artificial.
+O Host usa `moduleLifeCycleEvent.onMounted` para registrar remote-ready depois
+que o componente de cada modulo foi montado. O consumidor `<Module>` exibe o
+loading e o fallback com retry; `onError` encaminha falhas para o Sentry.
+`mfe:remote-ready` representa o estado pronto, nao o inicio e fim do fetch do
+bundle.
 
 ## Escopo
 
-- Marcar inicio, fim e erro de cada import Federation.
+- Marcar a prontidao de cada modulo montado.
 - Associar a medicao ao nome do modulo.
-- Diferenciar erro de importacao de erro de render.
-- Preservar o fallback e o retry existentes.
+- Reportar erros de carregamento ao Sentry.
+- Preservar loading, fallback e retry.
 
 ## Fora do escopo
 
@@ -33,10 +26,9 @@ pelo runtime do Module Federation. Nao foi adicionado um timeout artificial.
 
 ## Validacao
 
-- Testes automatizados verificam eventos de inicio, sucesso e erro, medida de
-  duracao e propagacao da rejeicao ao Error Boundary.
-- O tempo instrumentado termina quando o import dinamico resolve; ele mede o
-  carregamento do modulo e nao o tempo ate o primeiro conteudo renderizado.
-- A medicao em navegador deve ser coletada apos o deploy ouvindo o evento
-  `mfe:remote-load` ou consultando a Performance API. Comparacoes de rotas e
-  tempos de render permanecem fora da validacao automatizada local.
+- Testes automatizados verificam que o evento ready e emitido no callback de
+  montagem do modulo.
+- O tempo medido termina no primeiro mount; ele nao e uma medida de LCP nem
+  cobre o inicio do fetch do manifesto.
+- Medicoes de rota e render devem ser coletadas com a metodologia descrita em
+  [`performance-lib-comparison.md`](../performance-lib-comparison.md).
